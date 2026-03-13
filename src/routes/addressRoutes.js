@@ -1,6 +1,6 @@
 // routes/addressRoutes.js
 import { Router } from "express";
-import { protect } from "../middleware/auth.js";
+import { protect } from "../middlewares/authMiddleware.js";
 import {
   getAddresses,
   addAddress,

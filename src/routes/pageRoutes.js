@@ -1,6 +1,6 @@
 // routes/pageRoutes.js
 import { Router } from "express";
-import { protect, admin } from "../middleware/auth.js";
+import { protect, authorize  } from "../middlewares/authMiddleware.js";
 import {
   getPage,
   getAllPages,
@@ -14,10 +14,10 @@ const router = Router();
 router.get("/:slug", getPage);
 
 // admin
-router.route("/").get(protect, admin, getAllPages).post(protect, admin, createPage);
+router.route("/").get(protect, authorize("admin"), getAllPages).post(protect, authorize("admin"), createPage);
 router
   .route("/admin/:id")
-  .put(protect, admin, updatePage)
-  .delete(protect, admin, deletePage);
+  .put(protect, authorize("admin"), updatePage)
+  .delete(protect, authorize("admin"), deletePage);
 
 export default router;

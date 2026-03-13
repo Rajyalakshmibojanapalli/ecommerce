@@ -1,6 +1,6 @@
 // routes/newsletterRoutes.js
 import { Router } from "express";
-import { protect, admin } from "../middleware/auth.js";
+import { protect, authorize  } from "../middlewares/authMiddleware.js";
 import {
   subscribe,
   unsubscribe,
@@ -14,7 +14,7 @@ router.post("/subscribe", subscribe);
 router.post("/unsubscribe", unsubscribe);
 
 // admin
-router.get("/", protect, admin, getAllSubscribers);
-router.delete("/:id", protect, admin, deleteSubscriber);
+router.get("/", protect, authorize("admin"), getAllSubscribers);
+router.delete("/:id", protect, authorize("admin"), deleteSubscriber);
 
 export default router;

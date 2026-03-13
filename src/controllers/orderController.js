@@ -2,23 +2,17 @@ import Order from "../models/Order.js";
 import Cart from "../models/Cart.js";
 import Product from "../models/Product.js";
 import Coupon from "../models/Coupon.js";
-import ApiError from "../utils/ApiError.js";
-import ApiResponse from "../utils/ApiResponse.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { sendOrderConfirmation } from "../services/emailService.js";
 
 // @desc    Create order
-// @route   POST /api/v1/orders
 export const createOrder = asyncHandler(async (req, res) => {
   const { shippingAddress, paymentMethod, couponCode } = req.body;
 
-  // Get cart
-  const cart = await Cart.findOne({ user: req.user._id }).populate(
-    "items.product"
-  );
+  const cart = await Cart.findOne({ user: req.user._id }).populate("items.product");
 
   if (!cart || cart.items.length === 0) {
-    throw new ApiError(400, "Cart is empty");
+    return res.badRequest("Cart is empty");
   }
 
   // Validate stock & build order items
@@ -29,16 +23,16 @@ export const createOrder = asyncHandler(async (req, res) => {
     const product = item.product;
 
     if (!product.isActive) {
-      throw new ApiError(400, `${product.name} is no longer available`);
+      return res.badRequest(`${product.name} is no longer available`);
     }
     if (product.stock < item.quantity) {
-      throw new ApiError(400, `Insufficient stock for ${product.name}`);
+      return res.badRequest(`Insufficient stock for ${product.name}`);
     }
 
     orderItems.push({
       product: product._id,
       name: product.name,
-      image: product.images[0]?.url || "",
+      image: product.images[0]?.url || product.images[0] || "",
       price: product.price,
       quantity: item.quantity,
     });
@@ -47,34 +41,28 @@ export const createOrder = asyncHandler(async (req, res) => {
   }
 
   // Calculate prices
-  const taxPrice = Math.round(itemsPrice * 0.18); // 18% GST
-  const shippingPrice = itemsPrice > 500 ? 0 : 50; // Free shipping over ₹500
+  const taxPrice = Math.round(itemsPrice * 0.18);
+  const shippingPrice = itemsPrice > 500 ? 0 : 50;
   let discountAmount = 0;
   let couponData = {};
 
   // Apply coupon
   if (couponCode) {
-    const coupon = await Coupon.findOne({
-      code: couponCode.toUpperCase(),
-    });
+    const coupon = await Coupon.findOne({ code: couponCode.toUpperCase() });
 
     if (!coupon || !coupon.isValid()) {
-      throw new ApiError(400, "Invalid or expired coupon");
+      return res.badRequest("Invalid or expired coupon");
     }
 
     if (itemsPrice < coupon.minOrderAmount) {
-      throw new ApiError(
-        400,
-        `Min order amount for this coupon is ₹${coupon.minOrderAmount}`
-      );
+      return res.badRequest(`Min order amount for this coupon is ₹${coupon.minOrderAmount}`);
     }
 
-    // Check per user limit
     const userUsage = coupon.usedBy.find(
       (u) => u.user.toString() === req.user._id.toString()
     );
     if (userUsage && userUsage.count >= coupon.perUserLimit) {
-      throw new ApiError(400, "Coupon usage limit reached");
+      return res.badRequest("Coupon usage limit reached");
     }
 
     if (coupon.discountType === "percentage") {
@@ -88,7 +76,6 @@ export const createOrder = asyncHandler(async (req, res) => {
 
     couponData = { code: coupon.code, discount: discountAmount };
 
-    // Update coupon usage
     if (userUsage) {
       userUsage.count += 1;
     } else {
@@ -100,7 +87,6 @@ export const createOrder = asyncHandler(async (req, res) => {
 
   const totalAmount = itemsPrice + taxPrice + shippingPrice - discountAmount;
 
-  // Create order
   const order = await Order.create({
     user: req.user._id,
     orderItems,
@@ -112,14 +98,12 @@ export const createOrder = asyncHandler(async (req, res) => {
     discountAmount,
     totalAmount,
     coupon: couponData,
-    isPaid: paymentMethod === "COD" ? false : false,
+    isPaid: false,
     status: paymentMethod === "COD" ? "Processing" : "Pending",
-    statusHistory: [
-      {
-        status: paymentMethod === "COD" ? "Processing" : "Pending",
-        note: "Order placed",
-      },
-    ],
+    statusHistory: [{
+      status: paymentMethod === "COD" ? "Processing" : "Pending",
+      note: "Order placed",
+    }],
   });
 
   // Update product stock
@@ -133,16 +117,13 @@ export const createOrder = asyncHandler(async (req, res) => {
   cart.items = [];
   await cart.save();
 
-  // Send email
-  sendOrderConfirmation(req.user, order).catch(console.error);
+  // ✅ FIX: Pass email string, not user object
+  sendOrderConfirmation(req.user.email, order).catch(console.error);
 
-  res
-    .status(201)
-    .json(new ApiResponse(201, { order }, "Order placed successfully"));
+  return res.created({ order }, "Order placed successfully");
 });
 
 // @desc    Get my orders
-// @route   GET /api/v1/orders/my-orders
 export const getMyOrders = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, status } = req.query;
 
@@ -158,50 +139,43 @@ export const getMyOrders = asyncHandler(async (req, res) => {
     .limit(Number(limit))
     .lean();
 
-  res.status(200).json(
-    new ApiResponse(200, {
-      orders,
-      pagination: {
-        currentPage: Number(page),
-        totalPages: Math.ceil(total / Number(limit)),
-        totalOrders: total,
-      },
-    })
+  return res.paginated(
+    { orders },
+    { page: Number(page), limit: Number(limit), total },
+    "Orders fetched"
   );
 });
 
 // @desc    Get order by ID
-// @route   GET /api/v1/orders/:id
 export const getOrderById = asyncHandler(async (req, res) => {
   const order = await Order.findById(req.params.id)
     .populate("user", "name email")
     .populate("orderItems.product", "name slug images");
 
-  if (!order) throw new ApiError(404, "Order not found");
+  if (!order) return res.notFound("Order not found");
 
   // Check ownership (unless admin)
   if (
     order.user._id.toString() !== req.user._id.toString() &&
-    req.user.role !== "admin"
+    req.user.role?.toLowerCase() !== "admin"
   ) {
-    throw new ApiError(403, "Not authorized to view this order");
+    return res.forbidden("Not authorized to view this order");
   }
 
-  res.status(200).json(new ApiResponse(200, { order }));
+  return res.success({ order });
 });
 
 // @desc    Cancel order (User)
-// @route   PUT /api/v1/orders/:id/cancel
 export const cancelOrder = asyncHandler(async (req, res) => {
   const order = await Order.findOne({
     _id: req.params.id,
     user: req.user._id,
   });
 
-  if (!order) throw new ApiError(404, "Order not found");
+  if (!order) return res.notFound("Order not found");
 
   if (!["Pending", "Processing", "Confirmed"].includes(order.status)) {
-    throw new ApiError(400, "Order cannot be cancelled at this stage");
+    return res.badRequest("Order cannot be cancelled at this stage");
   }
 
   order.status = "Cancelled";
@@ -221,17 +195,14 @@ export const cancelOrder = asyncHandler(async (req, res) => {
 
   await order.save();
 
-  res
-    .status(200)
-    .json(new ApiResponse(200, { order }, "Order cancelled successfully"));
+  return res.success({ order }, "Order cancelled successfully");
 });
 
 // ============= ADMIN =============
 
 // @desc    Get all orders (Admin)
-// @route   GET /api/v1/orders/admin/all
 export const getAllOrders = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 20, status, search } = req.query;
+  const { page = 1, limit = 20, status } = req.query;
 
   const query = {};
   if (status) query.status = status;
@@ -246,25 +217,19 @@ export const getAllOrders = asyncHandler(async (req, res) => {
     .limit(Number(limit))
     .lean();
 
-  res.status(200).json(
-    new ApiResponse(200, {
-      orders,
-      pagination: {
-        currentPage: Number(page),
-        totalPages: Math.ceil(total / Number(limit)),
-        totalOrders: total,
-      },
-    })
+  return res.paginated(
+    { orders },
+    { page: Number(page), limit: Number(limit), total },
+    "Orders fetched"
   );
 });
 
 // @desc    Update order status (Admin)
-// @route   PUT /api/v1/orders/:id/status
 export const updateOrderStatus = asyncHandler(async (req, res) => {
   const { status } = req.body;
   const order = await Order.findById(req.params.id);
 
-  if (!order) throw new ApiError(404, "Order not found");
+  if (!order) return res.notFound("Order not found");
 
   order.status = status;
   order.statusHistory.push({
@@ -284,7 +249,5 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
 
   await order.save();
 
-  res
-    .status(200)
-    .json(new ApiResponse(200, { order }, "Order status updated"));
+  return res.success({ order }, "Order status updated");
 });

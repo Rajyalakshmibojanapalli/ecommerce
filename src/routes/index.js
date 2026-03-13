@@ -23,7 +23,10 @@ import addressRoutes from "./addressRoutes.js";
 import searchRoutes from "./searchRoutes.js";
 
 const router = Router();
-
+router.use((req, res, next) => {
+  console.log(`📌 Route hit: ${req.method} ${req.originalUrl}`);
+  next();
+});
 // ─── EXISTING ───
 router.use("/auth", authRoutes);
 router.use("/users", userRoutes);

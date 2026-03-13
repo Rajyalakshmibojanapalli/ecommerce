@@ -50,22 +50,37 @@ const responseHandler = (req, res, next) => {
   };
 
   // ✅ PAGINATED RESPONSE
-  res.paginated = (data, pagination, message = "Success") => {
-    return res.status(200).json({
-      success: 1,
-      statusCode: 200,
-      message,
-      data,
-      pagination: {
-        currentPage: pagination.page,
-        totalPages: Math.ceil(pagination.total / pagination.limit),
-        totalItems: pagination.total,
-        perPage: pagination.limit,
-        hasNextPage: pagination.page < Math.ceil(pagination.total / pagination.limit),
-        hasPrevPage: pagination.page > 1,
-      },
-    });
-  };
+  // res.paginated = (data, pagination, message = "Success") => {
+  //   return res.status(200).json({
+  //     success: 1,
+  //     statusCode: 200,
+  //     message,
+  //     data,
+  //     pagination: {
+  //       currentPage: pagination.page,
+  //       totalPages: Math.ceil(pagination.total / pagination.limit),
+  //       totalItems: pagination.total,
+  //       perPage: pagination.limit,
+  //       hasNextPage: pagination.page < Math.ceil(pagination.total / pagination.limit),
+  //       hasPrevPage: pagination.page > 1,
+  //     },
+  //   });
+  // };
+
+  // In utils/response.js — paginated method
+res.paginated = (data, pagination, message = "Success") => {
+  res.status(200).json({
+    success: true,
+    message,
+    data,
+    pagination: {
+      page: pagination.page,
+      limit: pagination.limit,
+      total: pagination.total,
+      totalPages: Math.ceil(pagination.total / pagination.limit),
+    },
+  });
+};
 
   // ✅ TOKEN RESPONSE (Login/Register)
   res.withToken = (data, token, message = "Success") => {

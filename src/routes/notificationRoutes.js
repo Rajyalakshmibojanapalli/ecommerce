@@ -1,6 +1,6 @@
 // routes/notificationRoutes.js
 import { Router } from "express";
-import { protect, admin } from "../middleware/auth.js";
+import { protect, authorize  } from "../middlewares/authMiddleware.js";
 import {
   getNotifications,
   markAsRead,
@@ -20,6 +20,6 @@ router.route("/:id").delete(deleteNotification);
 router.put("/:id/read", markAsRead);
 
 // admin
-router.post("/admin/broadcast", admin, broadcastNotification);
+router.post("/admin/broadcast", authorize("admin"), broadcastNotification);
 
 export default router;

@@ -44,7 +44,19 @@ export const getProducts = asyncHandler(async (req, res) => {
 
   const query = { isActive: true };
   if (search) query.$text = { $search: search };
-  if (category) query.category = category;
+  // if (category) query.category = category;
+  if (category) {
+  // Support both ID and slug
+  if (category.match(/^[0-9a-fA-F]{24}$/)) {
+    query.category = category;
+  } else {
+    const Category = (await import("../models/Category.js")).default;
+    const cat = await Category.findOne({
+      slug: { $regex: new RegExp(`^${category}$`, "i") },
+    });
+    if (cat) query.category = cat._id;
+  }
+}
   if (brand) query.brand = { $regex: brand, $options: "i" };
   if (minPrice || maxPrice) {
     query.price = {};

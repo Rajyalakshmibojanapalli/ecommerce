@@ -1,6 +1,6 @@
 // routes/bannerRoutes.js
 import { Router } from "express";
-import { protect, admin } from "../middleware/auth.js";
+import { protect, authorize  } from "../middlewares/authMiddleware.js";
 import {
   getBanners,
   getAllBanners,
@@ -14,11 +14,11 @@ const router = Router();
 router.get("/", getBanners);
 
 // admin
-router.get("/all", protect, admin, getAllBanners);
-router.post("/", protect, admin, createBanner);
+router.get("/all", protect, authorize("admin"), getAllBanners);
+router.post("/", protect, authorize("admin"), createBanner);
 router
   .route("/:id")
-  .put(protect, admin, updateBanner)
-  .delete(protect, admin, deleteBanner);
+  .put(protect, authorize("admin"), updateBanner)
+  .delete(protect, authorize("admin"), deleteBanner);
 
 export default router;

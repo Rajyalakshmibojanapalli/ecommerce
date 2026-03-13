@@ -1,25 +1,45 @@
 // controllers/wishlistController.js
 import Wishlist from "../models/Wishlist.js";
 import Product from "../models/Product.js";
+import { presignProductList } from "../services/s3Service.js";
 
 // GET /api/wishlist
 export const getWishlist = async (req, res, next) => {
   try {
     let wishlist = await Wishlist.findOne({ user: req.user._id }).populate({
       path: "products.product",
-      select: "name price images stock slug averageRating",
+      select: "name price images stock slug ratingsAverage comparePrice",
     });
 
     if (!wishlist) {
       wishlist = await Wishlist.create({ user: req.user._id, products: [] });
+      return res.json({
+        success: true,
+        data: { wishlist },
+      });
     }
 
-    // filter out deleted products
+    // Filter out deleted products
     wishlist.products = wishlist.products.filter((p) => p.product);
+
+    // ✅ Presign product images using S3
+    const productsList = wishlist.products.map((p) => p.product);
+    const presignedProducts = await presignProductList(
+      productsList.map((p) => (p.toObject ? p.toObject() : p))
+    );
+
+    // Map presigned images back to wishlist
+    const wishlistData = wishlist.toObject();
+    wishlistData.products = wishlistData.products
+      .filter((p) => p.product)
+      .map((p, index) => ({
+        ...p,
+        product: presignedProducts[index] || p.product,
+      }));
 
     res.json({
       success: true,
-      data: { wishlist },
+      data: { wishlist: wishlistData },
     });
   } catch (err) {
     next(err);
@@ -49,9 +69,7 @@ export const addToWishlist = async (req, res, next) => {
       );
 
       if (exists) {
-        return res
-          .status(400)
-          .json({ success: false, message: "Already in wishlist" });
+        return res.status(400).json({ success: false, message: "Already in wishlist" });
       }
 
       wishlist.products.push({ product: productId });
@@ -60,13 +78,27 @@ export const addToWishlist = async (req, res, next) => {
 
     await wishlist.populate({
       path: "products.product",
-      select: "name price images stock slug averageRating",
+      select: "name price images stock slug ratingsAverage comparePrice",
     });
+
+    // ✅ Presign images
+    const productsList = wishlist.products
+      .filter((p) => p.product)
+      .map((p) => (p.product.toObject ? p.product.toObject() : p.product));
+    const presignedProducts = await presignProductList(productsList);
+
+    const wishlistData = wishlist.toObject();
+    wishlistData.products = wishlistData.products
+      .filter((p) => p.product)
+      .map((p, index) => ({
+        ...p,
+        product: presignedProducts[index] || p.product,
+      }));
 
     res.status(201).json({
       success: true,
       message: "Added to wishlist",
-      data: { wishlist },
+      data: { wishlist: wishlistData },
     });
   } catch (err) {
     next(err);
@@ -90,13 +122,27 @@ export const removeFromWishlist = async (req, res, next) => {
 
     await wishlist.populate({
       path: "products.product",
-      select: "name price images stock slug averageRating",
+      select: "name price images stock slug ratingsAverage comparePrice",
     });
+
+    // ✅ Presign images
+    const productsList = wishlist.products
+      .filter((p) => p.product)
+      .map((p) => (p.product.toObject ? p.product.toObject() : p.product));
+    const presignedProducts = await presignProductList(productsList);
+
+    const wishlistData = wishlist.toObject();
+    wishlistData.products = wishlistData.products
+      .filter((p) => p.product)
+      .map((p, index) => ({
+        ...p,
+        product: presignedProducts[index] || p.product,
+      }));
 
     res.json({
       success: true,
       message: "Removed from wishlist",
-      data: { wishlist },
+      data: { wishlist: wishlistData },
     });
   } catch (err) {
     next(err);
@@ -115,7 +161,7 @@ export const clearWishlist = async (req, res, next) => {
     res.json({
       success: true,
       message: "Wishlist cleared",
-      data: { wishlist },
+      data: { wishlist: wishlist || { products: [] } },
     });
   } catch (err) {
     next(err);
@@ -126,8 +172,6 @@ export const clearWishlist = async (req, res, next) => {
 export const moveToCart = async (req, res, next) => {
   try {
     const { productId } = req.params;
-
-    // import Cart model
     const Cart = (await import("../models/Cart.js")).default;
 
     const product = await Product.findById(productId);
@@ -139,7 +183,6 @@ export const moveToCart = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Product out of stock" });
     }
 
-    // add to cart
     let cart = await Cart.findOne({ user: req.user._id });
     if (!cart) {
       cart = await Cart.create({
@@ -153,12 +196,11 @@ export const moveToCart = async (req, res, next) => {
       if (cartItem) {
         cartItem.quantity += 1;
       } else {
-        cart.items.push({ product: productId, quantity: 1 });
+        cart.items.push({ product: productId, quantity: 1 ,price: product.price});
       }
       await cart.save();
     }
 
-    // remove from wishlist
     const wishlist = await Wishlist.findOne({ user: req.user._id });
     if (wishlist) {
       wishlist.products = wishlist.products.filter(

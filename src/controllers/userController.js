@@ -1,12 +1,10 @@
 import User from "../models/User.js";
 import Address from "../models/Address.js";
-import Product from "../models/Product.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import {
   uploadAvatar,
   deleteFromS3,
   presignUserAvatar,
-  presignProductList,
 } from "../services/s3Service.js";
 
 // @desc    Update profile
@@ -18,9 +16,7 @@ export const updateProfile = asyncHandler(async (req, res) => {
     { new: true, runValidators: true }
   );
 
-  // ✅ Presign avatar
   const presigned = await presignUserAvatar(user);
-
   return res.success({ user: presigned }, "Profile updated");
 });
 
@@ -30,12 +26,10 @@ export const updateAvatar = asyncHandler(async (req, res) => {
 
   const user = await User.findById(req.user._id);
 
-  // Delete old avatar
   if (user.avatar?.key) {
     await deleteFromS3(user.avatar.key);
   }
 
-  // Upload new avatar
   try {
     const avatar = await uploadAvatar(req.file);
     user.avatar = avatar;
@@ -48,7 +42,6 @@ export const updateAvatar = asyncHandler(async (req, res) => {
   }
 
   const presigned = await presignUserAvatar(user);
-
   return res.success({ user: presigned }, "Avatar updated");
 });
 
@@ -57,7 +50,7 @@ export const changePassword = asyncHandler(async (req, res) => {
   const { currentPassword, newPassword } = req.body;
   const user = await User.findById(req.user._id).select("+password");
 
-  const isMatch = await user.comparePassword(currentPassword);
+  const isMatch = await user.matchPassword(currentPassword);
   if (!isMatch) return res.badRequest("Current password is incorrect");
 
   user.password = newPassword;
@@ -123,33 +116,3 @@ export const deleteAddress = asyncHandler(async (req, res) => {
   return res.noContent("Address deleted");
 });
 
-// =================== WISHLIST ===================
-
-export const toggleWishlist = asyncHandler(async (req, res) => {
-  const { productId } = req.params;
-  const user = await User.findById(req.user._id);
-
-  const index = user.wishlist.indexOf(productId);
-  if (index > -1) {
-    user.wishlist.splice(index, 1);
-  } else {
-    const product = await Product.findById(productId);
-    if (!product) return res.notFound("Product not found");
-    user.wishlist.push(productId);
-  }
-
-  await user.save();
-  return res.success({ wishlist: user.wishlist }, "Wishlist updated");
-});
-
-export const getWishlist = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.user._id).populate({
-    path: "wishlist",
-    select: "name slug price mrp discount images ratingsAverage stock",
-  });
-
-  // ✅ Presign wishlist product images
-  const wishlist = await presignProductList(user.wishlist);
-
-  return res.success({ wishlist });
-});

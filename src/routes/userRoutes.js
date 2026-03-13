@@ -7,8 +7,6 @@ import {
   getAddresses,
   updateAddress,
   deleteAddress,
-  toggleWishlist,
-  getWishlist,
 } from "../controllers/userController.js";
 import { protect } from "../middlewares/authMiddleware.js";
 import upload from "../middlewares/uploadMiddleware.js";
@@ -31,7 +29,7 @@ router.route("/addresses").get(getAddresses).post(addAddress);
 router.route("/addresses/:id").put(updateAddress).delete(deleteAddress);
 
 // Wishlist
-router.get("/wishlist", getWishlist);
-router.post("/wishlist/:productId", toggleWishlist);
+// router.get("/wishlist", getWishlist);
+// router.post("/wishlist/:productId", toggleWishlist);
 
 export default router;

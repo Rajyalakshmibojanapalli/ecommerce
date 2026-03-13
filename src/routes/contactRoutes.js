@@ -1,6 +1,6 @@
 // routes/contactRoutes.js
 import { Router } from "express";
-import { protect, admin } from "../middleware/auth.js";
+import { protect, authorize  } from "../middlewares/authMiddleware.js";
 import {
   submitContact,
   getAllContacts,
@@ -14,11 +14,11 @@ const router = Router();
 router.post("/", submitContact);
 
 // admin
-router.get("/", protect, admin, getAllContacts);
+router.get("/", protect, authorize("admin"), getAllContacts);
 router
   .route("/:id")
-  .get(protect, admin, getContact)
-  .put(protect, admin, updateContact)
-  .delete(protect, admin, deleteContact);
+  .get(protect, authorize("admin"), getContact)
+  .put(protect, authorize("admin"), updateContact)
+  .delete(protect, authorize("admin"), deleteContact);
 
 export default router;

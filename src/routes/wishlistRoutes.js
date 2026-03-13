@@ -1,6 +1,5 @@
-// routes/wishlistRoutes.js
+// src/routes/wishlistRoutes.js
 import { Router } from "express";
-import { protect } from "../middleware/auth.js";
 import {
   getWishlist,
   addToWishlist,
@@ -8,13 +7,16 @@ import {
   clearWishlist,
   moveToCart,
 } from "../controllers/wishlistController.js";
+import { protect } from "../middlewares/authMiddleware.js";
 
 const router = Router();
 
 router.use(protect);
 
-router.route("/").get(getWishlist).delete(clearWishlist);
-router.route("/:productId").post(addToWishlist).delete(removeFromWishlist);
+router.get("/", getWishlist);
+router.post("/:productId", addToWishlist);
+router.delete("/:productId", removeFromWishlist);
+router.delete("/", clearWishlist);
 router.post("/:productId/move-to-cart", moveToCart);
 
 export default router;

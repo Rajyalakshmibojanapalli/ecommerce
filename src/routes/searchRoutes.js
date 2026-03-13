@@ -1,6 +1,6 @@
 // routes/searchRoutes.js
 import { Router } from "express";
-import { protect, optionalAuth } from "../middleware/auth.js";
+import { protect,  } from "../middlewares/authMiddleware.js";
 import {
   globalSearch,
   getSuggestions,
@@ -11,7 +11,7 @@ import {
 
 const router = Router();
 
-router.get("/", optionalAuth, globalSearch);
+router.get("/",  globalSearch);
 router.get("/suggestions", getSuggestions);
 router.get("/trending", getTrending);
 
